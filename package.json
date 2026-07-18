@@ -4,9 +4,10 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "dependencies": {},
   "devDependencies": {
+    "@nestjs/schematics": "^11.0.0",
     "@nx/js": "23.1.0",
+    "@nx/nest": "^23.1.0",
     "@swc-node/register": "1.11.1",
     "@swc/core": "1.15.8",
     "@swc/helpers": "0.5.18",
@@ -18,5 +19,6 @@
   },
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "dependencies": {}
 }
