@@ -8,6 +8,12 @@
     },
     {
       "path": "./apps/user-service"
+    },
+    {
+      "path": "./apps/chat-service-e2e"
+    },
+    {
+      "path": "./apps/chat-service"
     }
   ],
   "compilerOptions": {}
