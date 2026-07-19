@@ -47,11 +47,13 @@ export class UsersService {
         email: true,
         role: true,
         lastLogin: true,
+        password: true,
       },
     });
     if (!user) {
       throw HttpRpcException.notFound('User not found.');
     }
+
     return user;
   }
 

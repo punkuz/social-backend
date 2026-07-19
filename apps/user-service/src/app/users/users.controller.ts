@@ -1,5 +1,6 @@
 import { Controller } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -8,26 +9,60 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @MessagePattern('createUser')
+  /**
+   * Creates a new user.
+   * @param createUserDto 
+   * @returns user
+   */
+  @MessagePattern({ cmd: 'createUser' })
   create(@Payload() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
-  @MessagePattern('findAllUsers')
-  findAll() {
+  /**
+   * Finds all users.
+   * @returns users
+   */
+  @MessagePattern({ cmd: 'findAllUsers' })
+  findAll(@Ctx() ctx: RmqContext) {
     return this.usersService.findAll();
   }
 
-  @MessagePattern('findOneUser')
+  /**
+   * Finds a user by their email address.
+   * @param email 
+   * @returns user
+   */
+  @MessagePattern({ cmd: 'findUserByEmail' })
+  findByEmail(@Payload() email: string) {
+    return this.usersService.findByEmail(email);
+  }
+
+  /**
+   * Finds a user by their ID.
+   * @param id 
+   * @returns user
+   */
+  @MessagePattern({ cmd: 'findUserById' })
   findOne(@Payload() id: number) {
     return this.usersService.findOne(id);
   }
 
-  @MessagePattern('updateUser')
+  /**
+   * Updates a user.
+   * @param updateUserDto 
+   * @returns updated user
+   */
+  @MessagePattern({ cmd: 'updateUser' })
   update(@Payload() updateUserDto: UpdateUserDto) {
     return this.usersService.update(updateUserDto.id, updateUserDto);
   }
 
+  /**
+   * Removes a user by their ID.
+   * @param id 
+   * @returns result of the removal operation
+   */
   @MessagePattern('removeUser')
   remove(@Payload() id: number) {
     return this.usersService.remove(id);
