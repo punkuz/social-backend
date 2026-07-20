@@ -1,5 +1,11 @@
 # New Nx Repository
 
+## Social backend test client
+
+A simple HTML, CSS, and JavaScript playground is available at
+`apps/social-test-client`. See its README for startup commands and the manual
+test flow.
+
 <a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
 
 ✨ Your new, shiny [Nx workspace](https://nx.dev) is ready ✨.

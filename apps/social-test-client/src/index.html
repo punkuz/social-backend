@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Loop Chat</title>
+    <base href="/" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta
+      name="description"
+      content="A simple realtime chat client for the social backend."
+    />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+  </head>
+  <body>
+    <main id="auth-shell" class="auth-shell">
+      <section class="auth-brand" aria-label="Loop Chat introduction">
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="img">
+              <path d="M8 8.5h16a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4h-7.2L11 28v-4.5H8a4 4 0 0 1-4-4v-7a4 4 0 0 1 4-4Z" />
+              <path d="M10 14h12M10 18h8" />
+            </svg>
+          </span>
+          <span>Loop</span>
+        </div>
+        <div class="auth-copy">
+          <span class="eyebrow">Stay in the loop</span>
+          <h1>Good conversations start here.</h1>
+          <p>
+            Find your people, see who is around, and start chatting in one
+            click.
+          </p>
+        </div>
+        <div class="floating-chat floating-chat-one" aria-hidden="true">
+          <span class="mini-avatar coral">M</span>
+          <span>Hey! Are you free?</span>
+        </div>
+        <div class="floating-chat floating-chat-two" aria-hidden="true">
+          <span>Absolutely 👋</span>
+          <span class="mini-avatar violet">A</span>
+        </div>
+      </section>
+
+      <section class="auth-panel">
+        <div class="auth-card">
+          <div class="mobile-brand brand-lockup">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 32 32">
+                <path d="M8 8.5h16a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4h-7.2L11 28v-4.5H8a4 4 0 0 1-4-4v-7a4 4 0 0 1 4-4Z" />
+                <path d="M10 14h12M10 18h8" />
+              </svg>
+            </span>
+            <span>Loop</span>
+          </div>
+
+          <section id="login-view" class="auth-view" aria-labelledby="login-title">
+            <div class="auth-heading">
+              <span class="eyebrow">Welcome back</span>
+              <h2 id="login-title">Sign in to your account</h2>
+              <p>Pick up your conversations where you left them.</p>
+            </div>
+
+            <form id="login-form" class="auth-form">
+              <label>
+                Email address
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+              </label>
+              <p id="login-error" class="form-error" role="alert"></p>
+              <button class="primary-button" type="submit">
+                <span>Sign in</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </form>
+
+            <p class="auth-switch">
+              New to Loop?
+              <a href="#/signup">Create an account</a>
+            </p>
+          </section>
+
+          <section
+            id="signup-view"
+            class="auth-view hidden"
+            aria-labelledby="signup-title"
+          >
+            <div class="auth-heading">
+              <span class="eyebrow">Join Loop</span>
+              <h2 id="signup-title">Create your account</h2>
+              <p>You are only a few seconds away from your first chat.</p>
+            </div>
+
+            <form id="signup-form" class="auth-form">
+              <label>
+                Username
+                <input
+                  name="username"
+                  placeholder="How people will see you"
+                  autocomplete="username"
+                  required
+                />
+              </label>
+              <label>
+                Email address
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  name="password"
+                  type="password"
+                  minlength="8"
+                  placeholder="At least 8 characters"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+              <label>
+                Confirm password
+                <input
+                  name="passwordConfirm"
+                  type="password"
+                  minlength="8"
+                  placeholder="Enter it once more"
+                  autocomplete="new-password"
+                  required
+                />
+              </label>
+              <p id="signup-error" class="form-error" role="alert"></p>
+              <button class="primary-button" type="submit">
+                <span>Create account</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </form>
+
+            <p class="auth-switch">
+              Already have an account?
+              <a href="#/login">Sign in</a>
+            </p>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <main id="chat-shell" class="chat-shell hidden">
+      <aside class="people-panel">
+        <header class="people-header">
+          <div class="brand-lockup compact">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 32 32">
+                <path d="M8 8.5h16a4 4 0 0 1 4 4v7a4 4 0 0 1-4 4h-7.2L11 28v-4.5H8a4 4 0 0 1-4-4v-7a4 4 0 0 1 4-4Z" />
+                <path d="M10 14h12M10 18h8" />
+              </svg>
+            </span>
+            <span>Loop</span>
+          </div>
+
+          <div class="profile-menu">
+            <button
+              id="profile-button"
+              class="avatar-button"
+              type="button"
+              aria-label="Account menu"
+              aria-expanded="false"
+            >
+              <span id="my-avatar" class="profile-username">User</span>
+            </button>
+            <div id="profile-popover" class="profile-popover hidden">
+              <strong id="profile-name">User</strong>
+              <span id="profile-email">user@example.com</span>
+              <button id="logout-button" type="button">Sign out</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="people-title">
+          <div>
+            <span class="eyebrow">Messages</span>
+            <h1>People</h1>
+          </div>
+          <span id="socket-indicator" class="connection-pill offline">
+            <span></span>
+            Connecting
+          </span>
+        </div>
+
+        <label class="search-box">
+          <span class="sr-only">Search people</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <input
+            id="user-search"
+            type="search"
+            placeholder="Search username or email"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="people-list-heading">
+          <span id="people-list-label">Recent chats</span>
+          <span id="people-count">0</span>
+        </div>
+        <div id="people-list" class="people-list" aria-live="polite">
+          <div class="list-state">Loading people…</div>
+        </div>
+      </aside>
+
+      <section class="conversation-panel">
+        <div id="empty-chat" class="empty-chat">
+          <div class="empty-illustration" aria-hidden="true">
+            <span class="bubble bubble-left">Hi!</span>
+            <span class="bubble bubble-right">Hello 👋</span>
+          </div>
+          <h2>Your conversations live here</h2>
+          <p>Select someone from the list to start chatting.</p>
+        </div>
+
+        <div id="active-chat" class="active-chat hidden">
+          <header class="chat-header">
+            <button
+              id="back-to-people"
+              class="icon-button mobile-back"
+              type="button"
+              aria-label="Back to chats"
+            >
+              ←
+            </button>
+            <span id="active-avatar" class="avatar">?</span>
+            <div class="active-person">
+              <strong id="active-name">User</strong>
+              <span id="active-status">Offline</span>
+            </div>
+            <button
+              id="close-chat"
+              class="header-action close-action desktop-close"
+              type="button"
+              aria-label="Close chat"
+              title="Close chat"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" />
+              </svg>
+            </button>
+            <button
+              id="delete-conversation"
+              class="header-action danger-action"
+              type="button"
+              aria-label="Delete conversation"
+              title="Delete conversation"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+              </svg>
+            </button>
+          </header>
+
+          <div id="message-list" class="message-list" aria-live="polite">
+            <div class="list-state">Choose someone to start chatting.</div>
+          </div>
+
+          <div id="typing-indicator" class="typing-indicator" aria-live="polite"></div>
+
+          <form id="message-form" class="message-composer">
+            <label class="message-input-wrap">
+              <span class="sr-only">Message</span>
+              <textarea
+                id="message-input"
+                name="content"
+                rows="1"
+                maxlength="4000"
+                placeholder="Write a message…"
+                required
+              ></textarea>
+            </label>
+            <button class="send-button" type="submit" aria-label="Send message">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m4 4 17 8-17 8 3-8-3-8Z" />
+                <path d="M7 12h14" />
+              </svg>
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <div id="delete-dialog" class="dialog-backdrop hidden">
+      <section
+        class="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+      >
+        <span class="dialog-icon" aria-hidden="true">×</span>
+        <h2 id="delete-dialog-title">Delete this conversation?</h2>
+        <p>
+          It will disappear from your inbox. The other person will keep their
+          copy, and a new message can bring the conversation back.
+        </p>
+        <div class="dialog-actions">
+          <button id="cancel-delete" class="dialog-button secondary" type="button">
+            Cancel
+          </button>
+          <button id="confirm-delete" class="dialog-button danger" type="button">
+            Delete conversation
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+  </body>
+</html>

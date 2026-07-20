@@ -1,5 +1,5 @@
 import { Controller } from '@nestjs/common';
-import { Ctx, MessagePattern, Payload, RmqContext } from '@nestjs/microservices';
+import { MessagePattern, Payload } from '@nestjs/microservices';
 
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -11,7 +11,7 @@ export class UsersController {
 
   /**
    * Creates a new user.
-   * @param createUserDto 
+   * @param createUserDto
    * @returns user
    */
   @MessagePattern({ cmd: 'createUser' })
@@ -24,13 +24,18 @@ export class UsersController {
    * @returns users
    */
   @MessagePattern({ cmd: 'findAllUsers' })
-  findAll(@Ctx() ctx: RmqContext) {
+  findAll() {
     return this.usersService.findAll();
+  }
+
+  @MessagePattern({ cmd: 'searchUsers' })
+  search(@Payload() query: string) {
+    return this.usersService.search(query);
   }
 
   /**
    * Finds a user by their email address.
-   * @param email 
+   * @param email
    * @returns user
    */
   @MessagePattern({ cmd: 'findUserByEmail' })
@@ -40,7 +45,7 @@ export class UsersController {
 
   /**
    * Finds a user by their ID.
-   * @param id 
+   * @param id
    * @returns user
    */
   @MessagePattern({ cmd: 'findUserById' })
@@ -48,9 +53,14 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+  @MessagePattern({ cmd: 'findExistingUserIds' })
+  findExistingIds(@Payload() ids: number[]) {
+    return this.usersService.findExistingIds(ids);
+  }
+
   /**
    * Updates a user.
-   * @param updateUserDto 
+   * @param updateUserDto
    * @returns updated user
    */
   @MessagePattern({ cmd: 'updateUser' })
@@ -59,12 +69,12 @@ export class UsersController {
   }
 
   /**
-   * Removes a user by their ID.
-   * @param id 
-   * @returns result of the removal operation
+   * Deletes a user by their ID.
+   * @param id
+   * @returns result of the deletion operation
    */
-  @MessagePattern('removeUser')
-  remove(@Payload() id: number) {
-    return this.usersService.remove(id);
+  @MessagePattern({ cmd: 'deleteUser' })
+  delete(@Payload() id: number) {
+    return this.usersService.delete(id);
   }
 }

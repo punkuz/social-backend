@@ -1,0 +1,229 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chat-platform-config
+data:
+  KAFKA_CHAT_MESSAGES_TOPIC: chat.messages.v1
+  CHAT_QUEUE: chat_queue
+  USER_QUEUE: user_queue
+  KAFKA_CHAT_RECEIPTS_TOPIC: chat.receipts.v1
+  KAFKA_CHAT_MESSAGES_DLQ_TOPIC: chat.messages.dlq.v1
+  KAFKA_STORAGE_GROUP_ID: chat-storage-v1
+  KAFKA_FANOUT_GROUP_ID: realtime-fanout-v1
+  KAFKA_STORAGE_BATCH_SIZE: "500"
+  KAFKA_STORAGE_CONCURRENCY: "3"
+  KAFKA_FANOUT_CONCURRENCY: "3"
+  KAFKA_SSL: "true"
+  MONGODB_MIN_POOL_SIZE: "5"
+  MONGODB_MAX_POOL_SIZE: "50"
+  MONGODB_AUTO_INDEX: "false"
+  CONVERSATION_CACHE_TTL_SECONDS: "21600"
+  PRESENCE_TTL_SECONDS: "90"
+  WS_MESSAGE_RATE_PER_SECOND: "20"
+  WS_RECEIPT_RATE_PER_SECOND: "60"
+  WS_TYPING_RATE_PER_SECOND: "10"
+  WS_CORS_ORIGINS: https://app.example.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: realtime-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: realtime-gateway
+  template:
+    metadata:
+      labels:
+        app: realtime-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "3001"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: realtime-gateway
+          image: ghcr.io/your-org/realtime-gateway:replace-with-immutable-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3001
+          env:
+            - name: PORT
+              value: "3001"
+            - name: INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - configMapRef:
+                name: chat-platform-config
+            - secretRef:
+                name: chat-platform-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: realtime-gateway
+spec:
+  selector:
+    app: realtime-gateway
+  ports:
+    - name: websocket
+      port: 80
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: realtime-gateway
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: realtime-gateway
+  minReplicas: 3
+  maxReplicas: 100
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: realtime-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: realtime-gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-service
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: chat-service
+  template:
+    metadata:
+      labels:
+        app: chat-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "3002"
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: chat-service
+          image: ghcr.io/your-org/chat-service:replace-with-immutable-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: health
+              containerPort: 3002
+          env:
+            - name: HEALTH_PORT
+              value: "3002"
+          envFrom:
+            - configMapRef:
+                name: chat-platform-config
+            - secretRef:
+                name: chat-platform-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: health
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: chat-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: chat-service
+  minReplicas: 3
+  maxReplicas: 48
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chat-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: chat-service

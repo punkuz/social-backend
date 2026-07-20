@@ -3,7 +3,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
-import { Repository } from 'typeorm';
+import { ILike, In, Repository } from 'typeorm';
 import { HttpRpcException } from '../exceptions/http.rpc.exception';
 
 @Injectable()
@@ -26,6 +26,26 @@ export class UsersService {
     return this.userRepository.find();
   }
 
+  search(query: string) {
+    const term = query.trim();
+    if (!term) return [];
+
+    return this.userRepository.find({
+      where: [
+        { username: ILike(`%${term}%`) },
+        { email: ILike(`%${term}%`) },
+      ],
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+      },
+      order: { username: 'ASC' },
+      take: 50,
+    });
+  }
+
   async findOne(id: number) {
     const user = await this.userRepository.findOne({
       where: { id },
@@ -36,6 +56,21 @@ export class UsersService {
       throw HttpRpcException.notFound('User not found!.');
     }
     return user;
+  }
+
+  async findExistingIds(ids: number[]): Promise<number[]> {
+    const uniqueIds = [...new Set(ids)].filter(
+      (id) => Number.isInteger(id) && id > 0,
+    );
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const users = await this.userRepository.find({
+      where: { id: In(uniqueIds) },
+      select: { id: true },
+    });
+    return users.map((user) => user.id);
   }
 
   async findByEmail(email: string) {
@@ -67,7 +102,7 @@ export class UsersService {
     return this.userRepository.update(id, updateUserDto);
   }
 
-  remove(id: number) {
+  delete(id: number) {
     return this.userRepository.delete(id);
   }
 }

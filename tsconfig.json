@@ -14,6 +14,12 @@
     },
     {
       "path": "./apps/chat-service"
+    },
+    {
+      "path": "./apps/realtime-gateway"
+    },
+    {
+      "path": "./apps/social-test-client"
     }
   ],
   "compilerOptions": {}
