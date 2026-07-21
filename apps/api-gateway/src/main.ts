@@ -11,6 +11,7 @@ import { AppModule } from './app/app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
+  // Enable shutdown hooks for graceful shutdown
   app.enableShutdownHooks();
 
   const globalPrefix = 'api/v1';

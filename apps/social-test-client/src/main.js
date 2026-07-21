@@ -19,6 +19,7 @@ const state = {
   viewingConversationId: '',
   deleteTargetConversationId: '',
   deleteTargetUserId: null,
+  groupMemberIds: new Set(),
   activeUserId: null,
   activeConversationId: '',
   socket: null,
@@ -53,6 +54,7 @@ const elements = {
   myAvatar: byId('my-avatar'),
   logoutButton: byId('logout-button'),
   socketIndicator: byId('socket-indicator'),
+  newGroupButton: byId('new-group-button'),
   userSearch: byId('user-search'),
   peopleListLabel: byId('people-list-label'),
   peopleCount: byId('people-count'),
@@ -69,6 +71,16 @@ const elements = {
   backToPeople: byId('back-to-people'),
   closeChat: byId('close-chat'),
   deleteConversation: byId('delete-conversation'),
+  groupDialog: byId('group-dialog'),
+  groupForm: byId('group-form'),
+  groupName: byId('group-name'),
+  groupMemberSearch: byId('group-member-search'),
+  groupMemberList: byId('group-member-list'),
+  groupSelectedCount: byId('group-selected-count'),
+  groupError: byId('group-error'),
+  cancelGroup: byId('cancel-group'),
+  cancelGroupIcon: byId('cancel-group-icon'),
+  createGroup: byId('create-group'),
   deleteDialog: byId('delete-dialog'),
   deleteDialogTitle: byId('delete-dialog-title'),
   cancelDelete: byId('cancel-delete'),
@@ -79,8 +91,16 @@ const elements = {
 elements.loginForm.addEventListener('submit', handleLogin);
 elements.signupForm.addEventListener('submit', handleSignup);
 elements.logoutButton.addEventListener('click', logout);
+elements.newGroupButton.addEventListener('click', openGroupDialog);
 elements.userSearch.addEventListener('input', handleUserSearchInput);
 elements.userSearch.addEventListener('focus', refreshFocusedUserSearch);
+elements.groupMemberSearch.addEventListener('input', renderGroupMembers);
+elements.groupForm.addEventListener('submit', createGroupConversation);
+elements.cancelGroup.addEventListener('click', closeGroupDialog);
+elements.cancelGroupIcon.addEventListener('click', closeGroupDialog);
+elements.groupDialog.addEventListener('click', (event) => {
+  if (event.target === elements.groupDialog) closeGroupDialog();
+});
 elements.messageForm.addEventListener('submit', sendMessage);
 elements.messageInput.addEventListener('input', handleComposerInput);
 elements.messageInput.addEventListener('keydown', handleComposerKeydown);
@@ -104,12 +124,9 @@ document.addEventListener('click', (event) => {
   closeChatFromOutsideClick(event);
 });
 document.addEventListener('keydown', (event) => {
-  if (
-    event.key === 'Escape' &&
-    !elements.deleteDialog.classList.contains('hidden')
-  ) {
-    closeDeleteDialog();
-  }
+  if (event.key !== 'Escape') return;
+  if (!elements.groupDialog.classList.contains('hidden')) closeGroupDialog();
+  else if (!elements.deleteDialog.classList.contains('hidden')) closeDeleteDialog();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) suspendConversationView();
@@ -254,6 +271,7 @@ function logout() {
   state.viewingConversationId = '';
   state.deleteTargetConversationId = '';
   state.deleteTargetUserId = null;
+  state.groupMemberIds.clear();
   state.activeUserId = null;
   state.activeConversationId = '';
   state.chatStarted = false;
@@ -266,6 +284,7 @@ function logout() {
   elements.signupForm.reset();
   elements.userSearch.value = '';
   closeProfileMenu();
+  closeGroupDialog();
   closeDeleteDialog();
   window.location.hash = '#/login';
   route();
@@ -363,17 +382,13 @@ async function refreshDirectoryForSearch(requestId, query) {
 async function loadConversations() {
   const conversations = await api('/chat/conversations');
   state.conversations = Array.isArray(conversations) ? conversations : [];
+  const unreadCounts = {};
   for (const conversation of state.conversations) {
-    if (conversation.type !== 'direct') continue;
-    const otherUserId = conversation.memberIds?.find(
-      (id) => Number(id) !== Number(state.user?.id),
-    );
-    if (!Number.isInteger(Number(otherUserId))) continue;
-    state.unreadCounts[otherUserId] = Math.max(
-      Number(state.unreadCounts[otherUserId] || 0),
-      Number(conversation.unreadCount || 0),
+    unreadCounts[conversation.conversationId] = Number(
+      conversation.unreadCount || 0,
     );
   }
+  state.unreadCounts = unreadCounts;
   renderPeople();
   updateUnreadTitle();
   joinKnownConversations();
@@ -381,145 +396,197 @@ async function loadConversations() {
 
 function renderPeople() {
   const query = elements.userSearch.value.trim().toLowerCase();
-  const hasCurrentSearchResults =
-    query && state.directorySearchResultQuery === query;
-  const candidates = query
-    ? hasCurrentSearchResults
-      ? state.directorySearchResults
-      : state.users
-    : state.users.filter((user) => Boolean(findDirectConversation(user.id)));
-  const filtered = candidates
-    .filter((user) => {
-      if (!query) return true;
-      return (
-        String(user.username).toLowerCase().includes(query) ||
-        String(user.email).toLowerCase().includes(query)
-      );
-    })
-    .sort((first, second) => {
-      const activityDifference =
-        inboxTimestamp(second) - inboxTimestamp(first);
-      if (activityDifference) return activityDifference;
-      const presenceDifference =
-        Number(Boolean(state.presence[second.id])) -
-        Number(Boolean(state.presence[first.id]));
-      return (
-        presenceDifference ||
-        String(first.username).localeCompare(String(second.username))
-      );
-    });
-
-  elements.peopleListLabel.textContent = query ? 'Search results' : 'Recent chats';
-  elements.peopleCount.textContent = String(filtered.length);
   elements.peopleList.replaceChildren();
 
-  if (!filtered.length) {
+  if (query) {
+    const hasCurrentSearchResults = state.directorySearchResultQuery === query;
+    const candidates = hasCurrentSearchResults
+      ? state.directorySearchResults
+      : state.users;
+    const filtered = candidates
+      .filter(
+        (user) =>
+          String(user.username).toLowerCase().includes(query) ||
+          String(user.email).toLowerCase().includes(query),
+      )
+      .sort((first, second) => {
+        const presenceDifference =
+          Number(Boolean(state.presence[second.id])) -
+          Number(Boolean(state.presence[first.id]));
+        return (
+          presenceDifference ||
+          String(first.username).localeCompare(String(second.username))
+        );
+      });
+    elements.peopleListLabel.textContent = 'Search results';
+    elements.peopleCount.textContent = String(filtered.length);
+    if (!filtered.length) {
+      const empty = document.createElement('div');
+      empty.className = 'list-state';
+      empty.textContent = state.directorySearchLoading
+        ? 'Searching all people…'
+        : 'No people match that username or email.';
+      elements.peopleList.append(empty);
+      return;
+    }
+    for (const user of filtered) {
+      appendConversationRow(findDirectConversation(user.id), user);
+    }
+    return;
+  }
+
+  const conversations = [...state.conversations].sort(
+    (first, second) =>
+      conversationTimestamp(second) - conversationTimestamp(first),
+  );
+  elements.peopleListLabel.textContent = 'Recent chats';
+  elements.peopleCount.textContent = String(conversations.length);
+  if (!conversations.length) {
     const empty = document.createElement('div');
     empty.className = 'list-state';
-    empty.textContent = query
-      ? state.directorySearchLoading
-        ? 'Searching all people…'
-        : 'No people match that username or email.'
-      : 'No conversations yet. Search for someone to start chatting.';
+    empty.textContent =
+      'No conversations yet. Search for someone or create a group.';
     elements.peopleList.append(empty);
     return;
   }
 
-  for (const user of filtered) {
-    const online = Boolean(state.presence[user.id]);
-    const conversation = findDirectConversation(user.id);
-    const lastMessage = conversation?.lastMessage;
-    const unreadCount = Number(state.unreadCounts[user.id] || 0);
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'person-row';
-    if (Number(user.id) === Number(state.activeUserId)) row.classList.add('active');
-    if (unreadCount > 0) row.classList.add('unread');
-    row.setAttribute(
-      'aria-label',
-      `Chat with ${user.username}${unreadCount ? `, ${unreadCount} unread` : ''}`,
-    );
+  for (const conversation of conversations) {
+    appendConversationRow(conversation, conversationContact(conversation));
+  }
+}
 
-    const avatarWrap = document.createElement('span');
-    avatarWrap.className = 'person-avatar-wrap';
-    const avatar = document.createElement('span');
-    avatar.className = 'avatar';
-    setAvatar(avatar, user.username, user.id);
+function appendConversationRow(conversation, user) {
+  const isGroup = conversation?.type === 'group';
+  if (!isGroup && !user) return;
+  const title = isGroup
+    ? conversation.name || 'Untitled group'
+    : user.username;
+  const online = !isGroup && Boolean(state.presence[user.id]);
+  const lastMessage = conversation?.lastMessage;
+  const unreadCount = Number(
+    conversation ? state.unreadCounts[conversation.conversationId] || 0 : 0,
+  );
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'person-row';
+  const isActive = conversation
+    ? conversation.conversationId === state.activeConversationId
+    : Number(user.id) === Number(state.activeUserId);
+  if (isActive) row.classList.add('active');
+  if (unreadCount > 0) row.classList.add('unread');
+  row.setAttribute(
+    'aria-label',
+    `Open ${title}${isGroup ? ' group' : ' chat'}${unreadCount ? `, ${unreadCount} unread` : ''}`,
+  );
+
+  const avatarWrap = document.createElement('span');
+  avatarWrap.className = 'person-avatar-wrap';
+  const avatar = document.createElement('span');
+  avatar.className = `avatar${isGroup ? ' group-avatar' : ''}`;
+  setAvatar(
+    avatar,
+    title,
+    isGroup ? conversation.conversationId : user.id,
+  );
+  avatarWrap.append(avatar);
+  if (!isGroup) {
     const dot = document.createElement('span');
     dot.className = `presence-dot${online ? ' online' : ''}`;
     dot.setAttribute('aria-label', online ? 'Online' : 'Offline');
-    avatarWrap.append(avatar, dot);
-
-    const copy = document.createElement('span');
-    copy.className = 'person-copy';
-    const name = document.createElement('strong');
-    name.textContent = user.username;
-    const preview = document.createElement('span');
-    preview.className = 'person-preview';
-    if (lastMessage) {
-      const ownMessage =
-        Number(lastMessage.senderId) === Number(state.user?.id);
-      if (ownMessage) {
-        const receiptStatus = sidebarReceiptStatus(lastMessage);
-        const receipt = document.createElement('span');
-        receipt.className = `sidebar-receipt ${receiptStatus}`;
-        receipt.textContent = receiptStatusLabel(receiptStatus);
-        preview.append(receipt, ` · ${lastMessage.content}`);
-      } else {
-        preview.textContent = lastMessage.content;
-      }
-    } else {
-      preview.textContent = user.email;
-    }
-    copy.append(name, preview);
-
-    const meta = document.createElement('span');
-    meta.className = 'person-meta';
-    const time = document.createElement('span');
-    time.className = `person-state${online && !lastMessage ? ' online' : ''}`;
-    time.textContent = lastMessage
-      ? formatInboxTime(messageDate(lastMessage))
-      : online
-        ? 'Online'
-        : '';
-    meta.append(time);
-    if (unreadCount > 0) {
-      const unread = document.createElement('span');
-      unread.className = 'unread-badge';
-      unread.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
-      meta.append(unread);
-    }
-
-    row.append(avatarWrap, copy, meta);
-    row.addEventListener('click', () => openDirectChat(user.id));
-
-    const rowShell = document.createElement('div');
-    rowShell.className = 'person-row-shell';
-    rowShell.append(row);
-    if (conversation) {
-      const deleteButton = document.createElement('button');
-      deleteButton.type = 'button';
-      deleteButton.className = 'sidebar-delete';
-      deleteButton.innerHTML = `
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h16" />
-          <path d="M9 7V4h6v3" />
-          <path d="m6.5 7 .75 13h9.5l.75-13" />
-          <path d="M10 11v5M14 11v5" />
-        </svg>
-      `;
-      deleteButton.title = `Delete conversation with ${user.username}`;
-      deleteButton.setAttribute(
-        'aria-label',
-        `Delete conversation with ${user.username}`,
-      );
-      deleteButton.addEventListener('click', () =>
-        openDeleteDialog(conversation.conversationId, user.id),
-      );
-      rowShell.append(deleteButton);
-    }
-    elements.peopleList.append(rowShell);
+    avatarWrap.append(dot);
   }
+
+  const copy = document.createElement('span');
+  copy.className = 'person-copy';
+  const name = document.createElement('strong');
+  name.textContent = title;
+  const preview = document.createElement('span');
+  preview.className = 'person-preview';
+  if (lastMessage) {
+    const ownMessage = Number(lastMessage.senderId) === Number(state.user?.id);
+    if (ownMessage) {
+      const receiptStatus = sidebarReceiptStatus(lastMessage);
+      const receipt = document.createElement('span');
+      receipt.className = `sidebar-receipt ${receiptStatus}`;
+      receipt.textContent = receiptStatusLabel(receiptStatus);
+      preview.append(receipt, ` · ${lastMessage.content}`);
+    } else if (isGroup) {
+      const senderName = userById(lastMessage.senderId)?.username || 'Someone';
+      preview.textContent = `${senderName}: ${lastMessage.content}`;
+    } else {
+      preview.textContent = lastMessage.content;
+    }
+  } else {
+    preview.textContent = isGroup
+      ? `${conversation.memberIds?.length || 0} members`
+      : user.email;
+  }
+  copy.append(name, preview);
+
+  const meta = document.createElement('span');
+  meta.className = 'person-meta';
+  const time = document.createElement('span');
+  time.className = `person-state${online && !lastMessage ? ' online' : ''}`;
+  time.textContent = lastMessage
+    ? formatInboxTime(messageDate(lastMessage))
+    : online
+      ? 'Online'
+      : '';
+  meta.append(time);
+  if (unreadCount > 0) {
+    const unread = document.createElement('span');
+    unread.className = 'unread-badge';
+    unread.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    meta.append(unread);
+  }
+
+  row.append(avatarWrap, copy, meta);
+  row.addEventListener('click', () => {
+    if (isGroup) openGroupChat(conversation.conversationId);
+    else openDirectChat(user.id);
+  });
+
+  const rowShell = document.createElement('div');
+  rowShell.className = 'person-row-shell';
+  rowShell.append(row);
+  if (conversation) {
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'sidebar-delete';
+    deleteButton.innerHTML = `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16" />
+        <path d="M9 7V4h6v3" />
+        <path d="m6.5 7 .75 13h9.5l.75-13" />
+        <path d="M10 11v5M14 11v5" />
+      </svg>
+    `;
+    deleteButton.title = `Delete ${title}`;
+    deleteButton.setAttribute('aria-label', `Delete ${title}`);
+    deleteButton.addEventListener('click', () =>
+      openDeleteDialog(conversation.conversationId, isGroup ? null : user.id),
+    );
+    rowShell.append(deleteButton);
+  }
+  elements.peopleList.append(rowShell);
+}
+
+function conversationContact(conversation) {
+  if (conversation?.type !== 'direct') return null;
+  const otherUserId = conversation.memberIds?.find(
+    (id) => Number(id) !== Number(state.user?.id),
+  );
+  return userById(otherUserId);
+}
+
+function conversationTimestamp(conversation) {
+  const activity =
+    conversation?.lastMessage?.sentAt ||
+    conversation?.lastMessage?.createdAt ||
+    conversation?.updatedAt ||
+    conversation?.createdAt;
+  const timestamp = activity ? new Date(activity).getTime() : 0;
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function setAvatar(element, username, id) {
@@ -531,9 +598,175 @@ function setAvatar(element, username, id) {
     .join('')
     .toUpperCase() || '?';
 
-  const hue = (Number(id) * 47 + 102) % 360;
+  const numericId = Number(id);
+  const seed = Number.isFinite(numericId)
+    ? numericId
+    : [...String(id)].reduce(
+        (total, character) => (total * 31 + character.charCodeAt(0)) % 997,
+        0,
+      );
+  const hue = (seed * 47 + 102) % 360;
   element.style.background = `hsl(${hue} 42% 88%)`;
   element.style.color = `hsl(${hue} 38% 28%)`;
+}
+
+async function openGroupDialog() {
+  closeProfileMenu();
+  state.groupMemberIds.clear();
+  elements.groupForm.reset();
+  elements.groupError.textContent = '';
+  elements.groupDialog.classList.remove('hidden');
+  renderGroupMembers();
+  elements.groupName.focus();
+
+  try {
+    await loadDirectory();
+    renderGroupMembers();
+  } catch (error) {
+    elements.groupError.textContent = `Could not refresh people: ${errorMessage(error)}`;
+  }
+}
+
+function closeGroupDialog() {
+  elements.groupDialog.classList.add('hidden');
+  state.groupMemberIds.clear();
+  elements.groupForm.reset();
+  elements.groupError.textContent = '';
+  renderGroupMembers();
+}
+
+function renderGroupMembers() {
+  const query = elements.groupMemberSearch.value.trim().toLowerCase();
+  const users = state.users
+    .filter(
+      (user) =>
+        !query ||
+        String(user.username).toLowerCase().includes(query) ||
+        String(user.email).toLowerCase().includes(query),
+    )
+    .sort((first, second) =>
+      String(first.username).localeCompare(String(second.username)),
+    );
+  elements.groupMemberList.replaceChildren();
+
+  if (!users.length) {
+    const empty = createState(
+      query ? 'No people match that search.' : 'No other users are available.',
+    );
+    elements.groupMemberList.append(empty);
+    updateGroupSelectedCount();
+    return;
+  }
+
+  for (const user of users) {
+    const label = document.createElement('label');
+    label.className = 'group-member-row';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = String(user.id);
+    checkbox.checked = state.groupMemberIds.has(Number(user.id));
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) state.groupMemberIds.add(Number(user.id));
+      else state.groupMemberIds.delete(Number(user.id));
+      label.classList.toggle('selected', checkbox.checked);
+      updateGroupSelectedCount();
+    });
+
+    const avatar = document.createElement('span');
+    avatar.className = 'avatar avatar-small';
+    setAvatar(avatar, user.username, user.id);
+    const copy = document.createElement('span');
+    copy.className = 'group-member-copy';
+    const name = document.createElement('strong');
+    name.textContent = user.username;
+    const email = document.createElement('span');
+    email.textContent = user.email;
+    copy.append(name, email);
+    const checkmark = document.createElement('span');
+    checkmark.className = 'group-member-check';
+    checkmark.textContent = '✓';
+    label.classList.toggle('selected', checkbox.checked);
+    label.append(checkbox, avatar, copy, checkmark);
+    elements.groupMemberList.append(label);
+  }
+  updateGroupSelectedCount();
+}
+
+function updateGroupSelectedCount() {
+  const count = state.groupMemberIds.size;
+  elements.groupSelectedCount.textContent = `${count} selected${count < 2 ? ' · choose at least 2' : ''}`;
+}
+
+async function createGroupConversation(event) {
+  event.preventDefault();
+  const name = elements.groupName.value.trim();
+  const memberIds = [...state.groupMemberIds];
+  elements.groupError.textContent = '';
+  if (!name) {
+    elements.groupError.textContent = 'Enter a group name.';
+    elements.groupName.focus();
+    return;
+  }
+  if (memberIds.length < 2) {
+    elements.groupError.textContent = 'Choose at least two other people.';
+    return;
+  }
+
+  setButtonBusy(elements.createGroup, true, 'Creating…');
+  try {
+    const conversation = await api('/chat/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'group', name, memberIds }),
+    });
+    upsertConversation(conversation);
+    state.unreadCounts[conversation.conversationId] = 0;
+    joinConversation(conversation.conversationId);
+    closeGroupDialog();
+    renderPeople();
+    await openGroupChat(conversation.conversationId);
+    showToast(`${name} was created.`);
+  } catch (error) {
+    elements.groupError.textContent = errorMessage(error);
+  } finally {
+    setButtonBusy(elements.createGroup, false);
+  }
+}
+
+async function openGroupChat(conversationId) {
+  const conversation = conversationById(conversationId);
+  if (!conversation || conversation.type !== 'group') return;
+  if (
+    conversationId === state.activeConversationId &&
+    !elements.activeChat.classList.contains('hidden')
+  ) {
+    requestActiveConversationView();
+    return;
+  }
+
+  const requestId = ++state.openChatRequestId;
+  suspendConversationView();
+  state.openingUserId = null;
+  state.activeUserId = null;
+  state.activeConversationId = conversationId;
+  elements.chatShell.classList.add('chat-open');
+  renderPeople();
+  renderActiveHeader();
+  elements.emptyChat.classList.add('hidden');
+  elements.activeChat.classList.remove('hidden');
+  renderMessageLoading();
+
+  try {
+    joinConversation(conversationId);
+    await loadHistory(conversationId);
+    if (requestId !== state.openChatRequestId) return;
+    requestActiveConversationView();
+    elements.messageInput.focus();
+  } catch (error) {
+    showToast(`Could not open this group: ${errorMessage(error)}`, 'error');
+    elements.messageList.replaceChildren(
+      createState('Could not load this conversation.'),
+    );
+  }
 }
 
 async function openDirectChat(userId) {
@@ -611,6 +844,7 @@ function closeChatFromOutsideClick(event) {
     elements.activeChat.contains(target) ||
     target.closest('.person-row') ||
     target.closest('.sidebar-delete') ||
+    elements.groupDialog.contains(target) ||
     elements.deleteDialog.contains(target)
   ) {
     return;
@@ -701,6 +935,12 @@ function findDirectConversation(otherUserId) {
   );
 }
 
+function conversationById(conversationId) {
+  return state.conversations.find(
+    (conversation) => conversation.conversationId === conversationId,
+  );
+}
+
 function upsertConversation(conversation) {
   const index = state.conversations.findIndex(
     (item) => item.conversationId === conversation.conversationId,
@@ -714,17 +954,6 @@ function upsertConversation(conversation) {
     };
   }
   else state.conversations.unshift(conversation);
-}
-
-function inboxTimestamp(user) {
-  const conversation = findDirectConversation(user.id);
-  const activity =
-    conversation?.lastMessage?.sentAt ||
-    conversation?.lastMessage?.createdAt ||
-    conversation?.updatedAt ||
-    conversation?.createdAt;
-  const timestamp = activity ? new Date(activity).getTime() : 0;
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function formatInboxTime(date) {
@@ -744,9 +973,7 @@ function formatInboxTime(date) {
 }
 
 function updateConversationPreview(message) {
-  let conversation = state.conversations.find(
-    (item) => item.conversationId === message.conversationId,
-  );
+  let conversation = conversationById(message.conversationId);
   if (!conversation) {
     const otherUserId =
       Number(message.senderId) === Number(state.user?.id)
@@ -775,16 +1002,13 @@ function updateConversationPreview(message) {
 function markActiveConversationRead() {
   if (
     !state.activeConversationId ||
-    !state.activeUserId ||
     state.viewingConversationId !== state.activeConversationId ||
     !canViewActiveConversation()
   ) {
     return;
   }
-  state.unreadCounts[state.activeUserId] = 0;
-  const conversation = state.conversations.find(
-    (item) => item.conversationId === state.activeConversationId,
-  );
+  state.unreadCounts[state.activeConversationId] = 0;
+  const conversation = conversationById(state.activeConversationId);
   if (conversation) conversation.unreadCount = 0;
   for (const message of state.messages[state.activeConversationId] || []) {
     acknowledgeMessage(message, 'seen');
@@ -802,8 +1026,20 @@ function updateUnreadTitle() {
 }
 
 function renderActiveHeader() {
+  const conversation = conversationById(state.activeConversationId);
+  if (conversation?.type === 'group') {
+    const name = conversation.name || 'Untitled group';
+    elements.activeName.textContent = name;
+    setAvatar(elements.activeAvatar, name, conversation.conversationId);
+    elements.activeAvatar.classList.add('group-avatar');
+    const memberCount = conversation.memberIds?.length || 0;
+    elements.activeStatus.textContent = `${memberCount} member${memberCount === 1 ? '' : 's'}`;
+    elements.activeStatus.classList.remove('online');
+    return;
+  }
   const contact = userById(state.activeUserId);
   if (!contact) return;
+  elements.activeAvatar.classList.remove('group-avatar');
   elements.activeName.textContent = contact.username;
   setAvatar(elements.activeAvatar, contact.username, contact.id);
   const online = Boolean(state.presence[contact.id]);
@@ -819,9 +1055,13 @@ function openDeleteDialog(
   state.deleteTargetConversationId = conversationId;
   state.deleteTargetUserId = Number(userId) || null;
   const contact = userById(userId);
-  elements.deleteDialogTitle.textContent = contact
-    ? `Delete conversation with ${contact.username}?`
-    : 'Delete this conversation?';
+  const conversation = conversationById(conversationId);
+  elements.deleteDialogTitle.textContent =
+    conversation?.type === 'group'
+      ? `Delete ${conversation.name || 'this group'}?`
+      : contact
+        ? `Delete conversation with ${contact.username}?`
+        : 'Delete this conversation?';
   elements.deleteDialog.classList.remove('hidden');
   elements.cancelDelete.focus();
 }
@@ -834,7 +1074,6 @@ function closeDeleteDialog() {
 
 async function deleteActiveConversation() {
   const conversationId = state.deleteTargetConversationId;
-  const userId = state.deleteTargetUserId;
   if (!conversationId) return;
   const deletingActiveConversation =
     state.activeConversationId === conversationId;
@@ -848,7 +1087,7 @@ async function deleteActiveConversation() {
       (conversation) => conversation.conversationId !== conversationId,
     );
     delete state.messages[conversationId];
-    if (userId) delete state.unreadCounts[userId];
+    delete state.unreadCounts[conversationId];
     if (deletingActiveConversation) {
       suspendConversationView();
       state.activeConversationId = '';
@@ -937,6 +1176,8 @@ function createState(text) {
 
 function renderMessages() {
   const conversationId = state.activeConversationId;
+  const activeConversation = conversationById(conversationId);
+  const isGroupConversation = activeConversation?.type === 'group';
   const messages = state.messages[conversationId] || [];
   elements.messageList.replaceChildren();
 
@@ -954,6 +1195,13 @@ function renderMessages() {
     const own = Number(message.senderId) === Number(state.user?.id);
     const group = document.createElement('article');
     group.className = `message-group${own ? ' own' : ''}`;
+
+    if (isGroupConversation && !own) {
+      const sender = document.createElement('span');
+      sender.className = 'message-sender';
+      sender.textContent = userById(message.senderId)?.username || 'Someone';
+      group.append(sender);
+    }
 
     const bubble = document.createElement('p');
     bubble.className = 'message-bubble';
@@ -1190,6 +1438,9 @@ function joinConversation(conversationId) {
 
 async function receiveMessage(message) {
   if (!message?.conversationId) return;
+  if (!conversationById(message.conversationId)) {
+    await ensureConversationKnown(message.conversationId);
+  }
   const messages = state.messages[message.conversationId] || [];
   const existing = messages.findIndex(
     (item) =>
@@ -1202,7 +1453,9 @@ async function receiveMessage(message) {
   state.messages[message.conversationId] = messages;
   updateConversationPreview(nextMessage);
 
+  const incomingConversation = conversationById(message.conversationId);
   const isSelectedSender =
+    incomingConversation?.type !== 'group' &&
     Number(state.activeUserId) === Number(message.senderId);
   if (isSelectedSender && state.activeConversationId !== message.conversationId) {
     state.activeConversationId = message.conversationId;
@@ -1217,13 +1470,36 @@ async function receiveMessage(message) {
     acknowledgeMessage(message, 'seen');
     renderMessages();
   } else {
-    state.unreadCounts[message.senderId] =
-      Number(state.unreadCounts[message.senderId] || 0) + 1;
+    state.unreadCounts[message.conversationId] =
+      Number(state.unreadCounts[message.conversationId] || 0) + 1;
     const sender = await ensureUserKnown(message.senderId);
-    showToast(`New message from ${sender?.username || 'someone'}`);
+    const senderName = sender?.username || 'someone';
+    showToast(
+      incomingConversation?.type === 'group'
+        ? `${senderName} sent a message in ${incomingConversation.name || 'a group'}`
+        : `New message from ${senderName}`,
+    );
   }
   renderPeople();
   updateUnreadTitle();
+}
+
+async function ensureConversationKnown(conversationId) {
+  const known = conversationById(conversationId);
+  if (known) return known;
+  try {
+    const conversations = await api('/chat/conversations', { cache: 'no-store' });
+    const conversation = Array.isArray(conversations)
+      ? conversations.find((item) => item.conversationId === conversationId)
+      : null;
+    if (conversation) {
+      upsertConversation(conversation);
+      joinConversation(conversationId);
+    }
+    return conversation || null;
+  } catch {
+    return null;
+  }
 }
 
 async function ensureUserKnown(userId) {

@@ -500,6 +500,44 @@ button {
   letter-spacing: -0.04em;
 }
 
+.people-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.new-group-button {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.38rem 0.65rem;
+  color: #1f6848;
+  background: #e5f3eb;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 850;
+  transition: color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+
+.new-group-button:hover,
+.new-group-button:focus-visible {
+  color: white;
+  background: var(--green);
+  transform: translateY(-1px);
+}
+
+.new-group-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .connection-pill {
   display: inline-flex;
   align-items: center;
@@ -675,6 +713,10 @@ button {
 
 .person-row.active .presence-dot {
   border-color: var(--green-soft);
+}
+
+.group-avatar {
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 72%);
 }
 
 .person-copy {
@@ -974,6 +1016,13 @@ button {
   font-size: 0.63rem;
 }
 
+.message-sender {
+  margin: 0 0.55rem 0.2rem;
+  color: #527061;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
 .receipt-status {
   font-weight: 750;
 }
@@ -1110,6 +1159,219 @@ button {
   backdrop-filter: blur(4px);
 }
 
+.group-dialog {
+  display: flex;
+  width: min(100%, 34rem);
+  max-height: min(47rem, calc(100dvh - 2rem));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dfe8e2;
+  border-radius: 1.15rem;
+  background: white;
+  box-shadow: 0 28px 80px rgb(24 46 34 / 24%);
+}
+
+.group-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 1.2rem 1.3rem 1rem;
+}
+
+.group-dialog-header h2 {
+  margin: 0.25rem 0 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.7rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+
+.dialog-close-button {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #607068;
+  background: #eef2ef;
+  cursor: pointer;
+  font-size: 1.3rem;
+}
+
+.dialog-close-button:hover,
+.dialog-close-button:focus-visible {
+  color: #263d32;
+  background: #e2e9e4;
+}
+
+.group-form {
+  display: grid;
+  min-height: 0;
+  gap: 0.9rem;
+  padding: 1.15rem 1.3rem 1.3rem;
+}
+
+.group-name-field {
+  display: grid;
+  gap: 0.42rem;
+  color: #435148;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.group-name-field input,
+.group-member-search {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: #f7f9f7;
+}
+
+.group-name-field input {
+  outline: none;
+  padding: 0.78rem 0.85rem;
+  color: var(--ink);
+}
+
+.group-name-field input:focus,
+.group-member-search:focus-within {
+  border-color: #75aa8c;
+  background: white;
+  box-shadow: 0 0 0 3px rgb(44 125 82 / 8%);
+}
+
+.group-member-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.group-member-search svg {
+  width: 1rem;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #809087;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+.group-member-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  font-size: 0.82rem;
+}
+
+.group-selection-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  color: #435148;
+  font-size: 0.72rem;
+}
+
+.group-selection-summary span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.group-member-list {
+  display: flex;
+  min-height: 8rem;
+  max-height: min(18rem, 34dvh);
+  flex-direction: column;
+  gap: 0.25rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  padding: 0.35rem;
+  background: #fbfcfb;
+}
+
+.group-member-list .list-state {
+  min-height: 8rem;
+}
+
+.group-member-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 0.7rem;
+  padding: 0.58rem 0.65rem;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.group-member-row:hover {
+  background: #f0f5f1;
+}
+
+.group-member-row.selected {
+  background: var(--green-soft);
+}
+
+.group-member-row input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.group-member-row input:focus-visible ~ .group-member-check {
+  box-shadow: 0 0 0 3px rgb(44 125 82 / 18%);
+}
+
+.group-member-copy {
+  min-width: 0;
+}
+
+.group-member-copy strong,
+.group-member-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-member-copy strong {
+  font-size: 0.82rem;
+}
+
+.group-member-copy span {
+  margin-top: 0.14rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.group-member-check {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 1px solid #cbd7cf;
+  border-radius: 50%;
+  color: transparent;
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.group-member-row.selected .group-member-check {
+  border-color: var(--green);
+  color: white;
+  background: var(--green);
+}
+
 .confirm-dialog {
   width: min(100%, 26rem);
   border: 1px solid #e6dedc;
@@ -1170,6 +1432,11 @@ button {
 .dialog-button.danger {
   color: white;
   background: #b74343;
+}
+
+.dialog-button.primary {
+  color: white;
+  background: var(--green);
 }
 
 .dialog-button:disabled {
@@ -1236,6 +1503,16 @@ button {
     padding: 1.25rem 1rem 0.9rem;
   }
 
+  .new-group-button {
+    width: 2.1rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .new-group-button span {
+    display: none;
+  }
+
   .search-box {
     margin: 0 1rem 1rem;
   }
@@ -1295,8 +1572,28 @@ button {
 
   .auth-form input,
   .search-box input,
+  .group-name-field input,
+  .group-member-search input,
   .message-composer textarea {
     font-size: 1rem;
+  }
+
+  .group-dialog-backdrop {
+    align-items: end;
+    padding:
+      max(0.75rem, env(safe-area-inset-top))
+      max(0.5rem, env(safe-area-inset-right))
+      max(0.5rem, env(safe-area-inset-bottom))
+      max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .group-dialog {
+    max-height: calc(100dvh - max(1.25rem, env(safe-area-inset-top)));
+  }
+
+  .group-dialog-header,
+  .group-form {
+    padding: 1rem;
   }
 
   .toast-region {

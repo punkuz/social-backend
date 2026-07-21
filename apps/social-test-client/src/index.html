@@ -200,12 +200,27 @@
         <div class="people-title">
           <div>
             <span class="eyebrow">Messages</span>
-            <h1>People</h1>
+            <h1>Chats</h1>
           </div>
-          <span id="socket-indicator" class="connection-pill offline">
-            <span></span>
-            Connecting
-          </span>
+          <div class="people-title-actions">
+            <button
+              id="new-group-button"
+              class="new-group-button"
+              type="button"
+              aria-label="Create a group chat"
+              title="Create a group chat"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="9" cy="8" r="3" />
+                <path d="M3.5 18c.5-3 2.4-4.5 5.5-4.5s5 1.5 5.5 4.5M17 7v6M14 10h6" />
+              </svg>
+              <span>New group</span>
+            </button>
+            <span id="socket-indicator" class="connection-pill offline">
+              <span></span>
+              Connecting
+            </span>
+          </div>
         </div>
 
         <label class="search-box">
@@ -309,6 +324,75 @@
       </section>
     </main>
 
+    <div id="group-dialog" class="dialog-backdrop group-dialog-backdrop hidden">
+      <section
+        class="group-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="group-dialog-title"
+      >
+        <header class="group-dialog-header">
+          <div>
+            <span class="eyebrow">New conversation</span>
+            <h2 id="group-dialog-title">Create a group</h2>
+          </div>
+          <button
+            id="cancel-group-icon"
+            class="dialog-close-button"
+            type="button"
+            aria-label="Close group creation"
+          >
+            ×
+          </button>
+        </header>
+
+        <form id="group-form" class="group-form">
+          <label class="group-name-field">
+            <span>Group name</span>
+            <input
+              id="group-name"
+              name="name"
+              type="text"
+              maxlength="100"
+              placeholder="Weekend plans"
+              autocomplete="off"
+              required
+            />
+          </label>
+
+          <label class="group-member-search">
+            <span class="sr-only">Search group members</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input
+              id="group-member-search"
+              type="search"
+              placeholder="Search username or email"
+              autocomplete="off"
+            />
+          </label>
+
+          <div class="group-selection-summary">
+            <strong>Choose members</strong>
+            <span id="group-selected-count">0 selected · choose at least 2</span>
+          </div>
+          <div id="group-member-list" class="group-member-list" aria-live="polite"></div>
+          <p id="group-error" class="form-error" role="alert"></p>
+
+          <div class="dialog-actions">
+            <button id="cancel-group" class="dialog-button secondary" type="button">
+              Cancel
+            </button>
+            <button id="create-group" class="dialog-button primary" type="submit">
+              Create group
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div id="delete-dialog" class="dialog-backdrop hidden">
       <section
         class="confirm-dialog"
@@ -319,7 +403,7 @@
         <span class="dialog-icon" aria-hidden="true">×</span>
         <h2 id="delete-dialog-title">Delete this conversation?</h2>
         <p>
-          It will disappear from your inbox. The other person will keep their
+          It will disappear from your inbox. Other participants will keep their
           copy, and a new message can bring the conversation back.
         </p>
         <div class="dialog-actions">

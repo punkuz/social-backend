@@ -12,6 +12,7 @@ import {
 } from './schemas/conversation.schema';
 import { CreateConversationDto } from './dto/create-conversation.dto';
 import { ConversationCacheService } from './conversation-cache.service';
+import { HttpRpcException } from '../exceptions/http.rpc.exception';
 
 export interface ConversationPreviewMessage {
   messageId: string;
@@ -57,29 +58,31 @@ export class ConversationService {
   }
 
   async create(actorId: number, dto: CreateConversationDto) {
+    // 1. Combine the logged-in user's ID with any additional member IDs, 
+    // and use a Set to automatically remove any duplicate entries.
     const memberIds = [...new Set([actorId, ...dto.memberIds])];
 
+    // 2. Validate that direct (1-on-1) chats contain exactly two members.
+    // If not, throw an RpcException with an HTTP 400 Bad Request status code.
     if (dto.type === ConversationType.Direct && memberIds.length !== 2) {
-      throw new RpcException({
-        code: 'INVALID_DIRECT_CONVERSATION',
-        message: 'A direct conversation must contain exactly two users',
-        statusCode: 400,
-      });
+      throw HttpRpcException.badRequest('A direct conversation must contain exactly two users');
     }
 
+    // 3. Validate that group chats contain at least three members.
+    // If not, throw an RpcException with a 400 status code.
     if (dto.type === ConversationType.Group && memberIds.length < 3) {
-      throw new RpcException({
-        code: 'INVALID_GROUP_CONVERSATION',
-        message: 'A group conversation must contain at least three users',
-        statusCode: 400,
-      });
+      throw HttpRpcException.badRequest('A group conversation must contain at least three users');
     }
 
+    // 4. Generate a unique, deterministic string key for direct conversations 
+    // (e.g., sorting IDs numerically so "1:2" is identical whether User 1 or User 2 initiates).
+    // Set to undefined if it is a group conversation.
     const directKey =
       dto.type === ConversationType.Direct
         ? memberIds.slice().sort((a, b) => a - b).join(':')
         : undefined;
 
+    // 5. If this is a direct/private conversation, check if a record with this directKey already exists.
     if (directKey) {
       const existing = await this.conversationModel
         .findOneAndUpdate(
@@ -94,7 +97,8 @@ export class ConversationService {
         return existing;
       }
     }
-
+    // 7. If no existing direct conversation was found (or if it's a new group chat),
+    // create a brand new conversation document in MongoDB.
     const conversation = await this.conversationModel.create({
       conversationId: randomUUID(),
       type: dto.type,
@@ -103,7 +107,9 @@ export class ConversationService {
       directKey,
       memberIds,
     });
+    // 8. Update the caching layer with the new conversation's members.
     await this.cache.replaceMembers(conversation.conversationId, memberIds);
+    // 9. Convert the Mongoose document to a plain JavaScript object and return it.
     return conversation.toObject();
   }
 
@@ -251,7 +257,7 @@ export class ConversationService {
       .exec();
 
     if (!conversation) {
-      throw this.notFound();
+      throw HttpRpcException.notFound('Conversation not found');
     }
 
     await this.cache.replaceMembers(conversationId, conversation.memberIds);
@@ -330,7 +336,7 @@ export class ConversationService {
       .lean()
       .exec();
     if (!conversation) {
-      throw this.forbidden();
+      throw HttpRpcException.forbidden('You are not a member of this conversation');
     }
 
     const safeLimit = Math.min(Math.max(limit, 1), 100);
@@ -342,11 +348,7 @@ export class ConversationService {
     if (before) {
       const beforeDate = new Date(before);
       if (Number.isNaN(beforeDate.getTime())) {
-        throw new RpcException({
-          code: 'INVALID_CURSOR',
-          message: 'before must be a valid ISO date',
-          statusCode: 400,
-        });
+        throw HttpRpcException.badRequest('before must be a valid ISO date');
       }
       createdAt.$lt = beforeDate;
     }
@@ -447,7 +449,7 @@ export class ConversationService {
         },
       )
       .exec();
-    if (result.matchedCount === 0) throw this.forbidden();
+    if (result.matchedCount === 0) throw HttpRpcException.forbidden('You are not a member of this conversation');
     return { conversationId, deleted: true };
   }
 
@@ -475,21 +477,5 @@ export class ConversationService {
     return createHmac('sha256', this.receiptSecret)
       .update(`${messageId}:${senderId}:${conversationId}`)
       .digest('hex');
-  }
-
-  private forbidden(): RpcException {
-    return new RpcException({
-      code: 'CONVERSATION_FORBIDDEN',
-      message: 'You are not a member of this conversation',
-      statusCode: 403,
-    });
-  }
-
-  private notFound(): RpcException {
-    return new RpcException({
-      code: 'CONVERSATION_NOT_FOUND',
-      message: 'Conversation not found',
-      statusCode: 404,
-    });
   }
 }
