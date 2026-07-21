@@ -4,6 +4,7 @@ import { ClientModule } from './client/client.module';
 import { ConfigModule } from '@nestjs/config';
 import { UserController } from './user/user.controller';
 import { ChatModule } from './chat/chat.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ChatModule } from './chat/chat.module';
     AuthModule,
     ClientModule,
     ChatModule,
+    UploadModule,
   ],
   controllers: [UserController],
   providers: [],

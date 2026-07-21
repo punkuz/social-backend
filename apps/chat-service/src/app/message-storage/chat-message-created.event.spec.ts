@@ -19,6 +19,26 @@ describe('parseChatMessageCreatedEvent', () => {
       ),
     ).toThrow('Unsupported chat message event');
   });
+
+  it('accepts an attachment-only message', () => {
+    const event = {
+      ...validEvent(),
+      content: '',
+      attachments: [validAttachment()],
+    };
+
+    expect(
+      parseChatMessageCreatedEvent(Buffer.from(JSON.stringify(event))),
+    ).toEqual(event);
+  });
+
+  it('rejects a message without text or attachments', () => {
+    expect(() =>
+      parseChatMessageCreatedEvent(
+        Buffer.from(JSON.stringify({ ...validEvent(), content: '' })),
+      ),
+    ).toThrow('content or attachments');
+  });
 });
 
 function validEvent() {
@@ -31,5 +51,15 @@ function validEvent() {
     senderId: 1,
     content: 'Hello',
     createdAt: '2026-07-20T10:00:00.000Z',
+  };
+}
+
+function validAttachment() {
+  return {
+    kind: 'photo',
+    url: `/api/v1/chat/uploads/photos/${'a'.repeat(8)}-${'b'.repeat(4)}-${'c'.repeat(4)}-${'d'.repeat(4)}-${'e'.repeat(12)}.jpg`,
+    name: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    size: 1024,
   };
 }

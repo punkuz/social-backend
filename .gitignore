@@ -53,3 +53,9 @@ Thumbs.db
 .nx/self-healing
 .nx/migrate-runs
 test-output
+
+# local chat uploads (keep the directory structure, not uploaded content)
+/uploads/photos/*
+!/uploads/photos/.gitkeep
+/uploads/files/*
+!/uploads/files/.gitkeep

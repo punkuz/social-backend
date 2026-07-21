@@ -37,6 +37,7 @@ export class ChatMessageBatchWriter {
                 conversationId: event.conversationId,
                 senderId: event.senderId,
                 content: event.content,
+                attachments: event.attachments ?? [],
                 createdAt,
                 updatedAt: createdAt,
               },

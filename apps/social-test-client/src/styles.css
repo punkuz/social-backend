@@ -998,7 +998,107 @@ button {
   font-size: 0.9rem;
   line-height: 1.48;
   overflow-wrap: anywhere;
+}
+
+.message-text {
+  margin: 0;
   white-space: pre-wrap;
+}
+
+.message-attachments {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.message-bubble > .message-attachments:first-child {
+  margin-top: 0;
+}
+
+.photo-attachment {
+  position: relative;
+  display: grid;
+  width: min(22rem, 52vw);
+  min-height: 8rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  color: #627168;
+  background: #edf2ee;
+  font-size: 0.72rem;
+  text-decoration: none;
+}
+
+.photo-attachment img {
+  display: block;
+  width: 100%;
+  max-height: 24rem;
+  object-fit: contain;
+}
+
+.photo-attachment.loading img {
+  display: none;
+}
+
+.photo-attachment.failed {
+  color: #9f4343;
+  background: #fff0f0;
+}
+
+.file-attachment {
+  display: grid;
+  min-width: min(18rem, 48vw);
+  max-width: 24rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 0.75rem;
+  padding: 0.7rem;
+  color: #294238;
+  background: #edf3ef;
+  cursor: pointer;
+  text-align: left;
+}
+
+.message-group.own .file-attachment {
+  color: white;
+  background: rgb(255 255 255 / 16%);
+}
+
+.file-attachment:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.file-attachment-icon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: rgb(255 255 255 / 65%);
+}
+
+.file-attachment > span:last-child {
+  min-width: 0;
+}
+
+.file-attachment strong,
+.file-attachment small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-attachment strong {
+  font-size: 0.75rem;
+}
+
+.file-attachment small {
+  margin-top: 0.15rem;
+  opacity: 0.72;
+  font-size: 0.62rem;
 }
 
 .message-group.own .message-bubble {
@@ -1045,12 +1145,107 @@ button {
 }
 
 .message-composer {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
   gap: 0.7rem;
   border-top: 1px solid var(--line);
   padding: 0.85rem clamp(1rem, 3vw, 2rem) 1rem;
   background: white;
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.attachment-input {
+  display: none;
+}
+
+.attach-button {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #456154;
+  background: #edf2ef;
+  cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.attach-button:hover,
+.attach-button:focus-visible {
+  color: white;
+  background: var(--green);
+}
+
+.attach-button:disabled,
+.attach-button.uploading {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.attach-button svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.attachment-preview {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.pending-attachment {
+  display: grid;
+  min-width: 10rem;
+  max-width: 14rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  padding: 0.35rem;
+  color: #405248;
+  background: #f5f8f6;
+  font-size: 0.68rem;
+}
+
+.pending-attachment img,
+.pending-attachment > span:first-child {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  object-fit: cover;
+  background: white;
+}
+
+.pending-attachment > span:nth-last-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-attachment button {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border-radius: 50%;
+  color: #8c4c4c;
+  background: #ffebeb;
+  cursor: pointer;
+  font-size: 0.9rem;
 }
 
 .message-input-wrap {
@@ -1568,6 +1763,23 @@ button {
       max(0.8rem, env(safe-area-inset-right))
       max(0.75rem, env(safe-area-inset-bottom))
       max(0.8rem, env(safe-area-inset-left));
+  }
+
+  .composer-row {
+    gap: 0.4rem;
+  }
+
+  .attach-button {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
+
+  .photo-attachment {
+    width: min(18rem, 68vw);
+  }
+
+  .file-attachment {
+    min-width: min(16rem, 65vw);
   }
 
   .auth-form input,

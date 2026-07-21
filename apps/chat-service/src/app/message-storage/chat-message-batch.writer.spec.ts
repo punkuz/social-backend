@@ -37,6 +37,15 @@ describe('ChatMessageBatchWriter', () => {
       { conversationId: { $in: [event.conversationId] } },
       { $set: { hiddenForUserIds: [] } },
     );
+    expect(bulkWrite.mock.calls[0][0][0]).toEqual(
+      expect.objectContaining({
+        updateOne: expect.objectContaining({
+          update: expect.objectContaining({
+            $setOnInsert: expect.objectContaining({ attachments: [] }),
+          }),
+        }),
+      }),
+    );
   });
 
   it('does not call MongoDB for an empty batch', async () => {
@@ -63,6 +72,7 @@ function validEvent(): ChatMessageCreatedEvent {
     conversationId: 'dm:1:2',
     senderId: 1,
     content: 'Hello',
+    attachments: [],
     createdAt: '2026-07-20T10:00:00.000Z',
   };
 }

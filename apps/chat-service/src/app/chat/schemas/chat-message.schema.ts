@@ -3,6 +3,14 @@ import { HydratedDocument } from 'mongoose';
 
 export type ChatMessageDocument = HydratedDocument<ChatMessage>;
 
+export interface StoredMessageAttachment {
+  kind: 'photo' | 'file';
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
 @Schema({
   collection: 'chat_messages',
   timestamps: true,
@@ -21,8 +29,23 @@ export class ChatMessage {
   @Prop({ immutable: true, required: true, type: String })
   clientMessageId!: string;
 
-  @Prop({ maxlength: 4_000, required: true, trim: true, type: String })
+  @Prop({ default: '', maxlength: 4_000, trim: true, type: String })
   content!: string;
+
+  @Prop({
+    default: [],
+    type: [
+      {
+        _id: false,
+        kind: { enum: ['photo', 'file'], required: true, type: String },
+        url: { maxlength: 500, required: true, type: String },
+        name: { maxlength: 255, required: true, type: String },
+        mimeType: { maxlength: 150, required: true, type: String },
+        size: { max: 20 * 1024 * 1024, min: 1, required: true, type: Number },
+      },
+    ],
+  })
+  attachments!: StoredMessageAttachment[];
 
   createdAt!: Date;
 

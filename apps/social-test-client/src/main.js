@@ -14,6 +14,11 @@ const state = {
   conversations: [],
   presence: {},
   messages: {},
+  pendingAttachments: [],
+  attachmentObjectUrls: new Map(),
+  attachmentLoadPromises: new Map(),
+  attachmentUploadCount: 0,
+  attachmentUploadSession: 0,
   receiptStatuses: {},
   unreadCounts: {},
   viewingConversationId: '',
@@ -68,6 +73,11 @@ const elements = {
   typingIndicator: byId('typing-indicator'),
   messageForm: byId('message-form'),
   messageInput: byId('message-input'),
+  attachmentPreview: byId('attachment-preview'),
+  photoInput: byId('photo-input'),
+  fileInput: byId('file-input'),
+  attachPhoto: byId('attach-photo'),
+  attachFile: byId('attach-file'),
   backToPeople: byId('back-to-people'),
   closeChat: byId('close-chat'),
   deleteConversation: byId('delete-conversation'),
@@ -104,6 +114,14 @@ elements.groupDialog.addEventListener('click', (event) => {
 elements.messageForm.addEventListener('submit', sendMessage);
 elements.messageInput.addEventListener('input', handleComposerInput);
 elements.messageInput.addEventListener('keydown', handleComposerKeydown);
+elements.attachPhoto.addEventListener('click', () => elements.photoInput.click());
+elements.attachFile.addEventListener('click', () => elements.fileInput.click());
+elements.photoInput.addEventListener('change', () =>
+  uploadSelectedAttachments(elements.photoInput, 'photos'),
+);
+elements.fileInput.addEventListener('change', () =>
+  uploadSelectedAttachments(elements.fileInput, 'files'),
+);
 elements.backToPeople.addEventListener('click', closeActiveChat);
 elements.closeChat.addEventListener('click', closeActiveChat);
 elements.deleteConversation.addEventListener('click', () => openDeleteDialog());
@@ -136,7 +154,10 @@ window.addEventListener('blur', suspendConversationView);
 window.addEventListener('focus', syncMissedActivity);
 elements.profilePopover.addEventListener('click', (event) => event.stopPropagation());
 window.addEventListener('hashchange', route);
-window.addEventListener('beforeunload', () => stopRealtime());
+window.addEventListener('beforeunload', () => {
+  stopRealtime();
+  cleanupAttachmentUrls();
+});
 
 if (!window.location.hash) {
   window.location.hash = state.token && state.user ? '#/chat' : '#/login';
@@ -266,6 +287,8 @@ function logout() {
   state.conversations = [];
   state.presence = {};
   state.messages = {};
+  clearPendingAttachments();
+  cleanupAttachmentUrls();
   state.receiptStatuses = {};
   state.unreadCounts = {};
   state.viewingConversationId = '';
@@ -504,17 +527,18 @@ function appendConversationRow(conversation, user) {
   preview.className = 'person-preview';
   if (lastMessage) {
     const ownMessage = Number(lastMessage.senderId) === Number(state.user?.id);
+    const previewText = messagePreviewText(lastMessage);
     if (ownMessage) {
       const receiptStatus = sidebarReceiptStatus(lastMessage);
       const receipt = document.createElement('span');
       receipt.className = `sidebar-receipt ${receiptStatus}`;
       receipt.textContent = receiptStatusLabel(receiptStatus);
-      preview.append(receipt, ` · ${lastMessage.content}`);
+      preview.append(receipt, ` · ${previewText}`);
     } else if (isGroup) {
       const senderName = userById(lastMessage.senderId)?.username || 'Someone';
-      preview.textContent = `${senderName}: ${lastMessage.content}`;
+      preview.textContent = `${senderName}: ${previewText}`;
     } else {
-      preview.textContent = lastMessage.content;
+      preview.textContent = previewText;
     }
   } else {
     preview.textContent = isGroup
@@ -569,6 +593,18 @@ function appendConversationRow(conversation, user) {
     rowShell.append(deleteButton);
   }
   elements.peopleList.append(rowShell);
+}
+
+function messagePreviewText(message) {
+  const content = String(message?.content || '').trim();
+  if (content) return content;
+  const attachments = Array.isArray(message?.attachments)
+    ? message.attachments
+    : [];
+  if (!attachments.length) return 'Message';
+  const first = attachments[0];
+  const label = first.kind === 'photo' ? '📷 Photo' : `📎 ${first.name}`;
+  return attachments.length > 1 ? `${label} +${attachments.length - 1}` : label;
 }
 
 function conversationContact(conversation) {
@@ -825,6 +861,7 @@ function closeActiveChat() {
   if (!state.activeConversationId && !state.activeUserId) return;
   suspendConversationView();
   stopTyping();
+  clearPendingAttachments();
   state.openChatRequestId += 1;
   state.activeConversationId = '';
   state.activeUserId = null;
@@ -1203,9 +1240,15 @@ function renderMessages() {
       group.append(sender);
     }
 
-    const bubble = document.createElement('p');
+    const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    bubble.textContent = message.content || '';
+    if (message.content) {
+      const text = document.createElement('p');
+      text.className = 'message-text';
+      text.textContent = message.content;
+      bubble.append(text);
+    }
+    renderMessageAttachments(bubble, message.attachments);
 
     const meta = document.createElement('span');
     meta.className = 'message-meta';
@@ -1229,6 +1272,102 @@ function renderMessages() {
   requestAnimationFrame(() => {
     elements.messageList.scrollTop = elements.messageList.scrollHeight;
   });
+}
+
+function renderMessageAttachments(container, attachments) {
+  if (!Array.isArray(attachments) || !attachments.length) return;
+  const list = document.createElement('div');
+  list.className = 'message-attachments';
+
+  for (const attachment of attachments) {
+    if (attachment.kind === 'photo') {
+      const link = document.createElement('a');
+      link.className = 'photo-attachment loading';
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.setAttribute('aria-label', `Open ${attachment.name}`);
+      const image = document.createElement('img');
+      image.alt = attachment.name;
+      const loading = document.createElement('span');
+      loading.textContent = 'Loading photo…';
+      link.append(image, loading);
+      list.append(link);
+      loadAttachmentObjectUrl(attachment)
+        .then((url) => {
+          image.src = url;
+          link.href = url;
+          link.classList.remove('loading');
+          loading.remove();
+        })
+        .catch(() => {
+          link.classList.add('failed');
+          loading.textContent = 'Photo unavailable';
+        });
+      continue;
+    }
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'file-attachment';
+    button.setAttribute('aria-label', `Download ${attachment.name}`);
+    const icon = document.createElement('span');
+    icon.className = 'file-attachment-icon';
+    icon.textContent = '📎';
+    const copy = document.createElement('span');
+    const name = document.createElement('strong');
+    name.textContent = attachment.name;
+    const size = document.createElement('small');
+    size.textContent = formatFileSize(attachment.size);
+    copy.append(name, size);
+    button.append(icon, copy);
+    button.addEventListener('click', () => downloadAttachment(attachment, button));
+    list.append(button);
+  }
+  container.append(list);
+}
+
+async function loadAttachmentObjectUrl(attachment) {
+  const cached = state.attachmentObjectUrls.get(attachment.url);
+  if (cached) return cached;
+  const pending = state.attachmentLoadPromises.get(attachment.url);
+  if (pending) return pending;
+
+  const promise = fetch(attachment.url, {
+    headers: { Authorization: `Bearer ${state.token}` },
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error('Attachment could not be loaded');
+      const objectUrl = URL.createObjectURL(await response.blob());
+      state.attachmentObjectUrls.set(attachment.url, objectUrl);
+      return objectUrl;
+    })
+    .finally(() => state.attachmentLoadPromises.delete(attachment.url));
+  state.attachmentLoadPromises.set(attachment.url, promise);
+  return promise;
+}
+
+async function downloadAttachment(attachment, button) {
+  button.disabled = true;
+  try {
+    const objectUrl = await loadAttachmentObjectUrl(attachment);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = attachment.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } catch (error) {
+    showToast(`Could not download file: ${errorMessage(error)}`, 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function messageDate(message) {
@@ -1257,7 +1396,20 @@ function sendMessage(event) {
   event.preventDefault();
   const content = elements.messageInput.value.trim();
   const conversationId = state.activeConversationId;
-  if (!content || !conversationId) return;
+  const attachments = state.pendingAttachments.map(
+    ({ kind, url, name, mimeType, size }) => ({
+      kind,
+      url,
+      name,
+      mimeType,
+      size,
+    }),
+  );
+  if (state.attachmentUploadCount > 0) {
+    showToast('Wait for the attachment upload to finish.', 'error');
+    return;
+  }
+  if ((!content && !attachments.length) || !conversationId) return;
   if (!state.socket?.connected) {
     showToast('Still connecting. Try again in a moment.', 'error');
     return;
@@ -1269,6 +1421,7 @@ function sendMessage(event) {
     clientMessageId,
     conversationId,
     content,
+    attachments,
     senderId: state.user.id,
     sentAt: new Date().toISOString(),
     status: 'sending',
@@ -1282,6 +1435,7 @@ function sendMessage(event) {
   renderPeople();
   renderMessages();
   elements.messageForm.reset();
+  clearPendingAttachments(true);
   resizeComposer();
   stopTyping();
 
@@ -1289,7 +1443,135 @@ function sendMessage(event) {
     clientMessageId,
     conversationId,
     content,
+    attachments,
   });
+}
+
+async function uploadSelectedAttachments(input, folder) {
+  const files = [...(input.files || [])];
+  const uploadSession = state.attachmentUploadSession;
+  input.value = '';
+  if (!files.length) return;
+  const availableSlots = 5 - state.pendingAttachments.length;
+  if (availableSlots < 1) {
+    showToast('A message can contain up to 5 attachments.', 'error');
+    return;
+  }
+  if (files.length > availableSlots) {
+    showToast(`Only ${availableSlots} more attachment${availableSlots === 1 ? '' : 's'} can be added.`, 'error');
+  }
+
+  for (const file of files.slice(0, availableSlots)) {
+    const maximum = folder === 'photos' ? 8 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (file.size > maximum) {
+      showToast(
+        `${file.name} is too large. ${folder === 'photos' ? 'Photos' : 'Files'} can be up to ${folder === 'photos' ? '8' : '20'} MB.`,
+        'error',
+      );
+      continue;
+    }
+
+    state.attachmentUploadCount += 1;
+    updateAttachmentButtons();
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${state.apiBase}/chat/uploads/${folder}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${state.token}` },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          payload?.message || payload?.error || `Upload failed (${response.status})`,
+        );
+      }
+      if (uploadSession !== state.attachmentUploadSession) continue;
+      const localUrl = URL.createObjectURL(file);
+      state.attachmentObjectUrls.set(payload.url, localUrl);
+      state.pendingAttachments.push(payload);
+      renderAttachmentPreview();
+    } catch (error) {
+      showToast(`Could not upload ${file.name}: ${errorMessage(error)}`, 'error');
+    } finally {
+      state.attachmentUploadCount -= 1;
+      updateAttachmentButtons();
+    }
+  }
+}
+
+function renderAttachmentPreview() {
+  elements.attachmentPreview.replaceChildren();
+  elements.attachmentPreview.classList.toggle(
+    'hidden',
+    state.pendingAttachments.length === 0,
+  );
+  state.pendingAttachments.forEach((attachment, index) => {
+    const item = document.createElement('div');
+    item.className = `pending-attachment ${attachment.kind}`;
+    if (attachment.kind === 'photo') {
+      const image = document.createElement('img');
+      image.src = state.attachmentObjectUrls.get(attachment.url) || '';
+      image.alt = '';
+      item.append(image);
+    } else {
+      const icon = document.createElement('span');
+      icon.textContent = '📎';
+      item.append(icon);
+    }
+    const name = document.createElement('span');
+    name.textContent = attachment.name;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', `Remove ${attachment.name}`);
+    remove.textContent = '×';
+    remove.addEventListener('click', () => removePendingAttachment(index));
+    item.append(name, remove);
+    elements.attachmentPreview.append(item);
+  });
+}
+
+function removePendingAttachment(index) {
+  const [attachment] = state.pendingAttachments.splice(index, 1);
+  if (attachment) revokeAttachmentUrl(attachment.url);
+  renderAttachmentPreview();
+}
+
+function clearPendingAttachments(preserveUrls = false) {
+  state.attachmentUploadSession += 1;
+  if (!preserveUrls) {
+    for (const attachment of state.pendingAttachments) {
+      revokeAttachmentUrl(attachment.url);
+    }
+  }
+  state.pendingAttachments = [];
+  elements.photoInput.value = '';
+  elements.fileInput.value = '';
+  renderAttachmentPreview();
+}
+
+function revokeAttachmentUrl(url) {
+  const objectUrl = state.attachmentObjectUrls.get(url);
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  state.attachmentObjectUrls.delete(url);
+  state.attachmentLoadPromises.delete(url);
+}
+
+function cleanupAttachmentUrls() {
+  for (const objectUrl of state.attachmentObjectUrls.values()) {
+    URL.revokeObjectURL(objectUrl);
+  }
+  state.attachmentObjectUrls.clear();
+  state.attachmentLoadPromises.clear();
+}
+
+function updateAttachmentButtons() {
+  const uploading = state.attachmentUploadCount > 0;
+  elements.attachPhoto.disabled = uploading;
+  elements.attachFile.disabled = uploading;
+  elements.attachPhoto.classList.toggle('uploading', uploading);
+  elements.attachFile.classList.toggle('uploading', uploading);
 }
 
 function handleComposerInput() {

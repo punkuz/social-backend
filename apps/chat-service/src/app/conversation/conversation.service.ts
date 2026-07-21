@@ -2,7 +2,6 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import { RpcException } from '@nestjs/microservices';
 import type { Model } from 'mongoose';
 import { ChatMessage } from '../chat/schemas/chat-message.schema';
 import { MessageReceipt } from '../chat/schemas/message-receipt.schema';
@@ -18,6 +17,13 @@ export interface ConversationPreviewMessage {
   messageId: string;
   senderId: number;
   content: string;
+  attachments?: Array<{
+    kind: 'photo' | 'file';
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
+  }>;
   createdAt: Date;
 }
 
@@ -149,6 +155,7 @@ export class ConversationService {
                 messageId: '$messageId',
                 senderId: '$senderId',
                 content: '$content',
+                attachments: '$attachments',
                 createdAt: '$createdAt',
               },
             },

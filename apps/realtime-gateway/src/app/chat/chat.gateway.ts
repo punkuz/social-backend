@@ -15,7 +15,10 @@ import type { WsResponse } from '@nestjs/websockets';
 import type { Namespace, Socket } from 'socket.io';
 import { WsAuthService } from '../auth/ws-auth.service';
 import { ConversationAccessService } from '../conversation/conversation-access.service';
-import type { ChatMessageCreatedEvent } from '../kafka/chat-message.event';
+import type {
+  ChatMessageCreatedEvent,
+  MessageAttachment,
+} from '../kafka/chat-message.event';
 import type { ChatReceiptUpdatedEvent } from '../kafka/chat-receipt.event';
 import { KafkaProducerService } from '../kafka/kafka-producer.service';
 import { PresenceService } from '../presence/presence.service';
@@ -33,6 +36,7 @@ interface SendMessageCommand {
   clientMessageId: string;
   conversationId: string;
   content: string;
+  attachments: MessageAttachment[];
 }
 
 interface ReceiptCommand {
@@ -46,6 +50,7 @@ interface ChatMessageEvent {
   clientMessageId: string;
   conversationId: string;
   content: string;
+  attachments: MessageAttachment[];
   messageId: string;
   senderId: number;
   sentAt: string;
@@ -185,6 +190,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         conversationId: command.conversationId,
         senderId,
         content: command.content,
+        attachments: command.attachments,
         createdAt: sentAt,
       } satisfies ChatMessageCreatedEvent);
       this.metrics.accepted('message');
@@ -207,6 +213,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const message: ChatMessageEvent = {
       clientMessageId: event.clientMessageId,
       content: event.content,
+      attachments: event.attachments ?? [],
       messageId: event.messageId,
       conversationId: event.conversationId,
       senderId: event.senderId,
@@ -468,7 +475,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw this.invalidPayload('Message payload must be an object');
     }
 
-    const { clientMessageId, conversationId, content } = rawCommand;
+    const { clientMessageId, conversationId, content, attachments } = rawCommand;
 
     if (
       typeof clientMessageId !== 'string' ||
@@ -486,19 +493,56 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       throw this.invalidPayload('conversationId must be 1-128 characters');
     }
 
-    if (
-      typeof content !== 'string' ||
-      content.trim().length < 1 ||
-      content.length > 4_000
-    ) {
-      throw this.invalidPayload('content must be 1-4000 characters');
+    if (typeof content !== 'string' || content.length > 4_000) {
+      throw this.invalidPayload('content must be at most 4000 characters');
+    }
+
+    const parsedAttachments = this.parseAttachments(attachments);
+    if (content.trim().length === 0 && parsedAttachments.length === 0) {
+      throw this.invalidPayload('A message needs text or an attachment');
     }
 
     return {
       clientMessageId,
       conversationId,
       content,
+      attachments: parsedAttachments,
     };
+  }
+
+  private parseAttachments(value: unknown): MessageAttachment[] {
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.length > 5) {
+      throw this.invalidPayload('attachments must contain at most 5 items');
+    }
+
+    return value.map((attachment) => {
+      if (!this.isRecord(attachment)) {
+        throw this.invalidPayload('attachment is invalid');
+      }
+      const { kind, url, name, mimeType, size } = attachment;
+      if (
+        (kind !== 'photo' && kind !== 'file') ||
+        typeof url !== 'string' ||
+        !/^\/api\/v1\/chat\/uploads\/(photos|files)\/[a-f0-9-]{36}(?:\.[a-z0-9]{1,10})?$/.test(
+          url,
+        ) ||
+        (kind === 'photo' && !url.includes('/photos/')) ||
+        (kind === 'file' && !url.includes('/files/')) ||
+        typeof name !== 'string' ||
+        name.length < 1 ||
+        name.length > 255 ||
+        typeof mimeType !== 'string' ||
+        mimeType.length < 1 ||
+        mimeType.length > 150 ||
+        !Number.isInteger(size) ||
+        (size as number) < 1 ||
+        (size as number) > 20 * 1024 * 1024
+      ) {
+        throw this.invalidPayload('attachment is invalid');
+      }
+      return { kind, url, name, mimeType, size } as MessageAttachment;
+    });
   }
 
   private parseReceipt(rawCommand: unknown): ReceiptCommand {

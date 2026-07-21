@@ -157,6 +157,27 @@ describe('ChatGateway', () => {
     expect(toRoom).not.toHaveBeenCalled();
   });
 
+  it('publishes an attachment-only message', async () => {
+    const attachment = {
+      kind: 'file' as const,
+      url: `/api/v1/chat/uploads/files/${'a'.repeat(8)}-${'b'.repeat(4)}-${'c'.repeat(4)}-${'d'.repeat(4)}-${'e'.repeat(12)}.pdf`,
+      name: 'notes.pdf',
+      mimeType: 'application/pdf',
+      size: 2048,
+    };
+
+    await gateway.handleSendMessage(authenticatedSocket(1), {
+      clientMessageId: 'client-message-file',
+      conversationId: 'conversation-1',
+      content: '',
+      attachments: [attachment],
+    });
+
+    expect(publishChatMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: '', attachments: [attachment] }),
+    );
+  });
+
   it('fans out a Kafka message and its sent status through user rooms', async () => {
     await gateway.fanoutChatMessage({
       eventName: 'chat.message.created',
